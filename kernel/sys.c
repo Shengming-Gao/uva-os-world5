@@ -74,7 +74,13 @@ long sys_clone(unsigned long flags, unsigned long userstack,
 	 
 	/* STUDENT_TODO: your code here */
 
-	return copy_process(PF_UTHREAD, 0, 0, 0); /* STUDENT_TODO: replace this */
+	//return copy_process(PF_UTHREAD, 0, 0, 0); /* STUDENT_TODO: replace this */
+	return copy_process(
+		PF_UTHREAD,      // flag → “user thread” (share mm but separate stack)
+		0,               // fn (ignored for user threads)
+		userstack,       // pass the new user‐stack pointer down  
+		0           // name: NULL → inherit parent’s name
+	);
 }
 
 int sys_exit(int c){
@@ -232,7 +238,7 @@ void * const sys_call_table[] = {
 	[SYS_mkdir]   sys_mkdir,
 	[SYS_close]   sys_close,	
 	[SYS_lseek]   sys_lseek,	
-	[SYS_clone]   0, /* STUDENT_TODO: replace this */
+	[SYS_clone]   sys_clone, /* STUDENT_TODO: replace this */
 	[SYS_semcreate]   sys_semcreate,
 	[SYS_semfree]   sys_semfree,
 	[SYS_semp]   sys_semp,

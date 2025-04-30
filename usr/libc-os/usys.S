@@ -186,7 +186,8 @@ clone:
     // parent
     ret
     // child       cf: usr/libc-simple/usys.S
-1: ldp x1,x0,[sp],#0 /* STUDENT_TODO: replace this */
+//1: ldp x1,x0,[sp],#0 /* STUDENT_TODO: replace this */
+    ldp x1, x0, [sp], #16
     blr x1
     mov x8,#SYS_exit
     svc #0    
