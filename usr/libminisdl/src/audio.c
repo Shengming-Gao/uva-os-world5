@@ -27,7 +27,7 @@ static int ps = 1, cls = 0; // close flag
 
 // 0 on success 
 int sdl_init_audio(void) {
-  if ((sb = open("/dev/sb/", O_RDWR)) <= 0)  return -1; 
+  if ((sb = open("/dev/sb", O_RDWR)) <= 0)  return -1; 
   if (config_sbctl(SB_CMD_INIT, 0/*default chunk*/,-1,-1 /*dont care*/) != 0) return -1; 
   if (read_sbctl(&info) != 0) return -1;   
   return 0; 
@@ -46,10 +46,14 @@ void sdl_fini_audio(void) {
 */
 //quest: music player
 #define BUFSIZE (1024 * 16)
+#define AUDIO_THREAD_STACK_SIZE (8*1024)
+static char audio_stack[AUDIO_THREAD_STACK_SIZE];
+
 static int thread_func(void *param) {
   int len, total, ret = 0; 
   void (*fill)(void *userdata, uint8_t *stream, int len) 
     = param;   // callback to refill audio buffer
+  //printf("AUDIO-THREAD: started, sb=%d, callback=%p\n", sb, fill);
   assert(sb>0); 
   unsigned char *buf, *p; 
   
@@ -64,15 +68,27 @@ static int thread_func(void *param) {
     if (cls0) {ret = 0; goto done;}
     
     // invoke the provided callback to refill the audio buffer
-    fill(0,0,0); /* STUDENT_TODO: replace this */
+    //printf("AUDIO-THREAD: calling fill(NULL, buf, %d)\n", BUFSIZE);
+    fill(NULL,buf,BUFSIZE); /* STUDENT_TODO: replace this */
     total = BUFSIZE; p = buf;
     while (total > 0) {
       // write the data from the audio buffer ("buf") to /dev/sb
        
       /* STUDENT_TODO: your code here */
+      int written = write(sb, p, total);
+      //printf("AUDIO-THREAD: wrote %d bytes to /dev/sb (total left %d)\n",
+        //written, total - written);
+      if (written < 0) {
+        perror("write /dev/sb");
+        goto done;
+      }
+      p     += written;
+      total -= written;
+
       if (once) {
         // printf("start device\n"); 
         config_sbctl(SB_CMD_START, 0/*drv id*/,-1,-1);
+        //rintf("AUDIO-THREAD: started device\n");
         once = 0;
       }
     }
@@ -91,7 +107,7 @@ int SDL_OpenAudio(SDL_AudioSpec *desired, SDL_AudioSpec *obtained) {
   int wrfmt; // as known to /proc/sbctl, cf kernel sound.c TSoundFormat 
   if (desired->format == AUDIO_U8) 
     wrfmt = 0; 
-  else if (desired->format == AUDIO_S16)
+  else if (desired->format == AUDIO_S16 || desired->format == AUDIO_S16SYS)
     wrfmt = 1; 
   else
     return -1; 
@@ -104,6 +120,22 @@ int SDL_OpenAudio(SDL_AudioSpec *desired, SDL_AudioSpec *obtained) {
   // call clone() to create a new thread out of thread_func()
    
   /* STUDENT_TODO: your code here */
+
+  if (sdl_init_audio() != 0) {
+    perror("sdl_init_audio");
+    return -1;
+  }
+
+  int tid = clone(
+    thread_func,
+    audio_stack + AUDIO_THREAD_STACK_SIZE,
+    CLONE_VM,
+    desired->callback
+  );
+  if (tid < 0) {
+    perror("clone for audio thread");
+    return -1;
+  }
 
   return 0; /* STUDENT_TODO: replace this */
 }

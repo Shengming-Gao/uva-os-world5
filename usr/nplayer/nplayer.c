@@ -38,7 +38,7 @@
 #define MAX_VOLUME 128
 
 // do visualization on screen?  quest: make off initially
-#define HAS_VISUAL  1
+#define HAS_VISUAL 0
 
 stb_vorbis *v = NULL;
 stb_vorbis_info info = {};
@@ -56,7 +56,7 @@ int volume = MAX_VOLUME;
 SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;
 
-#ifdef HAS_VISUAL
+#if HAS_VISUAL
 static void drawVerticalLine(int x, int y0, int y1, uint32_t color /*abgr*/) {
   // NB: val is a/b/g/r. it does NOT matter here though. the caller just 
   // wants to create some changing colors
@@ -68,7 +68,7 @@ static void drawVerticalLine(int x, int y0, int y1, uint32_t color /*abgr*/) {
 
 //quest: music player
 static void visualeffect(int16_t *stream, int samples) {
-#ifdef HAS_VISUAL
+#if HAS_VISUAL
   int i;
   static int color = 0;
   SDL_SetRenderDrawColor(renderer, 0, 0, 255, 0); // blue bkgnd (ease of debugging)
@@ -109,10 +109,13 @@ static void AdjustVolume(int16_t *stream, int samples) {
 // len: buf length. 
 //quest: music player
 void FillAudio(void *userdata, uint8_t *stream, int len) {
+  //printf("FILLAUDIO: called with stream=%p len=%d\n", stream, len);
   int nbyte = 0;
   // call vorbis to decode ogg & fill "stream"...
+  int max_frames = len / (sizeof(int16_t) * info.channels);
   int samples_per_channel = stb_vorbis_get_samples_short_interleaved(v, info.channels, 
-    0, 0); /* STUDENT_TODO: replace this */
+    (int16_t*)stream,
+      max_frames); /* STUDENT_TODO: replace this */
   
   if (samples_per_channel != 0 || len < sizeof(int16_t)) {
     int samples = samples_per_channel * info.channels;
@@ -127,6 +130,10 @@ void FillAudio(void *userdata, uint8_t *stream, int len) {
   // make a copy of the current "stream" for visualization 
    
   /* STUDENT_TODO: your code here */
+  spinlock_lock(&sslock);
+  memcpy(stream_save, (int16_t*)stream,
+         nbyte);
+  spinlock_unlock(&sslock);
 }
 
 /* Usage
@@ -170,6 +177,15 @@ int main(int argc, char *argv[]) {
   void * buf = 0; size_t size = 0;
    
   /* STUDENT_TODO: your code here */
+  // slurp the entire .ogg into RAM
+  fseek(fp, 0, SEEK_END);
+  size = ftell(fp);
+  fseek(fp, 0, SEEK_SET);
+
+  buf = malloc(size);
+  assert(buf);
+  fread(buf, 1, size, fp);
+  fclose(fp);
 
   /* will call stb_vorbis to decode ogg in pieces */
   int error;
